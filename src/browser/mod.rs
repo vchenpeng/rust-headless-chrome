@@ -176,6 +176,10 @@ impl Browser {
         self.inner.process.as_ref().map(process::Process::get_id)
     }
 
+    pub fn get_debug_ws_url(&self) -> Url {
+        self.inner.process.as_ref().debug_ws_url
+    }
+
     /// The tabs are behind an `Arc` and `Mutex` because they're accessible from multiple threads
     /// (including the one that handles incoming protocol events about new or changed tabs).
     pub fn get_tabs(&self) -> &Arc<Mutex<Vec<Arc<Tab>>>> {
