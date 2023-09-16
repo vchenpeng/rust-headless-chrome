@@ -177,7 +177,7 @@ impl Browser {
     }
 
     pub fn get_debug_ws_url(&self) -> Url {
-        self.inner.process.as_ref().debug_ws_url
+        self.inner.process.debug_ws_url
     }
 
     /// The tabs are behind an `Arc` and `Mutex` because they're accessible from multiple threads
