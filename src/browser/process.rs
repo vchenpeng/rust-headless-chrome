@@ -238,6 +238,7 @@ impl Process {
         }
 
         let mut process = Self::start_process(&launch_options)?;
+        let mut port = launch_options.port.unwrap();
 
         info!("Started Chrome. PID: {}", process.0.id());
 
@@ -248,7 +249,7 @@ impl Process {
                 return Err(ChromeLaunchError::NoAvailablePorts {}.into());
             }
 
-            match Self::ws_url_from_output(process.0.borrow_mut()) {
+            match Self::ws_url_from_output(process.0.borrow_mut(), port) {
                 Ok(debug_ws_url) => {
                     url = debug_ws_url;
                     debug!("Found debugging WS URL: {:?}", url);
@@ -442,17 +443,29 @@ impl Process {
         Ok(None)
     }
 
-    fn ws_url_from_output(child_process: &mut Child) -> Result<Url> {
+    fn ws_url_from_output(child_process: &mut Child, port: u16) -> Result<Url> {
+        println!("debug_config_port {:?}", port);
         let chrome_output_result = util::Wait::with_timeout(Duration::from_secs(30)).until(|| {
-            let my_stderr = BufReader::new(child_process.stderr.as_mut()?);
-            match Self::ws_url_from_reader(my_stderr) {
-                Ok(output_option) => output_option.map(Ok),
-                Err(err) => Some(Err(err)),
+            // let my_stderr = BufReader::new(child_process.stderr.as_mut()?);
+            // match Self::ws_url_from_reader(my_stderr) {
+            //     Ok(output_option) => output_option.map(Ok),
+            //     Err(err) => Some(Err(err)),
+            // }
+            let debug_config = get_debug_config(port);
+            // if debug_config.success {
+            //     debug_config.webSocketDebuggerUrl
+            // }
+            // else {
+            //     None
+            // }
+            match debug_config.success {
+                true => debug_config.webSocketDebuggerUrl,
+                false => None
             }
         });
 
         if let Ok(output_result) = chrome_output_result {
-            Ok(Url::parse(&output_result?)?)
+            Ok(Url::parse(&output_result)?)
         } else {
             Err(ChromeLaunchError::PortOpenTimeout {}.into())
         }
@@ -471,6 +484,53 @@ fn get_available_port() -> Option<u16> {
 
 fn port_is_available(port: u16) -> bool {
     net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+}
+
+#[derive(serde::Serialize)]
+pub struct DebugConfig {
+	pub success: bool,
+	pub webSocketDebuggerUrl: Option<String>,
+	pub userAgent: Option<String>,
+	pub version: Option<String>
+}
+
+impl DebugConfig {
+	pub fn from_result(success: bool) -> Self {
+		Self {
+			success,
+			webSocketDebuggerUrl: None,
+			userAgent: None,
+			version: None,
+		}
+	}
+}
+
+fn get_debug_config(port: u16)-> DebugConfig {
+	let url = format!("http://127.0.0.1:{}/json/version", port);
+	println!("debug_config_url {:?}", url);
+	let response = reqwest::blocking::get(&url);
+	if response.is_ok() 
+	{
+		println!("config {:?}", response);
+		let mut resp = response.unwrap().json::<HashMap<String,String>>().unwrap();
+		let debugger_url = resp.get("webSocketDebuggerUrl").unwrap().to_string();
+		let userAgent = resp.get("User-Agent").unwrap().to_string();
+		let version = resp.get("Browser").unwrap().to_string();
+		let u = DebugConfig {
+			webSocketDebuggerUrl: Some(debugger_url),
+			userAgent: Some(userAgent),
+			version: Some(version),
+			..DebugConfig::from_result(true)
+		};
+		return u;
+	}
+	else 
+	{
+		let mut u = DebugConfig {
+			..DebugConfig::from_result(false)
+		};
+		return u;
+	}
 }
 
 #[cfg(test)]

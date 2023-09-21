@@ -27,6 +27,7 @@ tungstenite = "0.18"
 url = "2.3"
 which = "4.0"
 zip = { version = "0.6.3", optional = true }
+reqwest = { version = "0.10.10", features = ["blocking", "json"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.10"
